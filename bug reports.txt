@@ -1,0 +1,115 @@
+Current Technical Debt & Recommendations
+
+This file tracks verified technical debt and future-work items. It should not be treated as a list of active production bugs unless a specific item is promoted into a bugfix task.
+
+---
+
+### 1. `home_panel.py` remains too large
+
+**Status**: Valid technical debt.
+
+`home_panel.py` still contains multiple responsibilities, including home layout, search coordination, preview rendering, history UI, and event filtering. The earlier modularization successfully reduced `main.py`, but `home_panel.py` remains a major consolidation point.
+
+**Recommendation**: Split only after the v1.1.0 display architecture is stable. Candidate modules:
+- `display_preview.py`
+- `live_history_panel.py`
+- `search_panel.py`
+- `home_layout.py`
+- `display_controls.py`
+
+---
+
+### 2. Test runner / CI configuration is incomplete
+
+**Status**: Valid technical debt.
+
+Pytest-based tests and custom verification scripts exist, but the project still lacks formal test runner configuration such as `pytest.ini`, `pyproject.toml`, `setup.cfg`, or CI workflow configuration.
+
+**Recommendation**: Add `pytest.ini` or a `pyproject.toml` pytest section, then define a standard command that runs:
+- existing pytest tests
+- `verify_critical_fixes.py`
+- `pre_commit_checks.py`
+
+---
+
+### 3. Type hints are sparse and inconsistent
+
+**Status**: Valid technical debt.
+
+Only 4 of 32 source files import from `typing`, and only 3 use `from __future__ import annotations`. A few additional files use built-in annotations, but most of the codebase remains untyped.
+
+**Recommendation**: Do not mass-convert the entire app immediately. Add type hints gradually around stable core boundaries first:
+- `models.py`
+- `document_manager.py`
+- `display_channel.py`
+- `channel_manager.py`
+- `settings.py`
+
+---
+
+### 4. Display font-fit cache has basic eviction
+
+**Status**: Original risk was inaccurate.
+
+`DisplayWindow._fit_cache` already has FIFO eviction at 50 entries and is cleared on resize. There is no immediate leak bug from unlimited growth.
+
+**Recommendation**: No urgent action. If long-session profiling later shows churn, consider replacing FIFO eviction with a small LRU cache.
+
+---
+
+### 5. ChannelManager migration remains intentionally incomplete
+
+**Status**: Valid and intentional architectural debt.
+
+Phase 1 established `ChannelManager` and `DisplayChannel` as an adapter-first wrapper around the existing `DisplayController`. Existing consumers still use the raw `DisplayController` by design to preserve v1.0 behavior.
+
+**Recommendation**: Continue the roadmap sequence. New output features should use `ChannelManager`; existing `display.*` consumers should migrate gradually only when each phase needs it.
+
+---
+
+### 6. Cross-platform global hotkeys are incomplete
+
+**Status**: Valid but softened.
+
+Windows has a native `RegisterHotKey` backend. Unsupported platforms have `NullHotkeyBackend` plus focused-window `QShortcut` fallback, so the app remains usable, but Linux/macOS do not yet have true global hotkey backends.
+
+**Recommendation**: Defer native Linux/macOS global hotkeys until after v1.1.0 display work stabilizes.
+
+---
+
+### 7. No localization/i18n framework
+
+**Status**: Valid future work.
+
+UI strings are currently hardcoded in English. No `.ts`, `.qm`, or translation workflow exists.
+
+**Recommendation**: Defer unless multi-language distribution becomes a target.
+
+---
+
+### 8. Theme customization is limited
+
+**Status**: Valid future work.
+
+The active theme set currently contains three built-in themes: `dark_gold`, `high_contrast`, and `light`. There is no theme designer yet.
+
+**Recommendation**: Keep as future v1.3.0-level work. For v1.1.0, only add per-channel theme storage stubs if needed by the roadmap.
+
+---
+
+### 9. No packaging/build system
+
+**Status**: Valid technical debt.
+
+The project currently runs from the source tree and has no `pyproject.toml`, `setup.py`, `setup.cfg`, or PyInstaller/Nuitka spec.
+
+**Recommendation**: Add packaging before wider distribution or non-developer operator installs.
+
+---
+
+### Recommended Work Order
+
+1. Continue v1.1.0 Phase 2: fullscreen mode encapsulation / renderer seam preparation.
+2. Add formal test runner configuration before or during Phase 2 if consistent test execution becomes a blocker.
+3. Defer `home_panel.py` splitting until after lower-third and dual-channel UI constraints are clearer.
+4. Defer packaging, i18n, theme designer, and native Linux/macOS global hotkeys until display architecture stabilizes.

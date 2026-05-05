@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>VerseFlow — Stage 1: Bible Database Loader</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --gold: #c8a03c;
+    --gold-dim: rgba(200,160,60,0.15);
+    --gold-border: rgba(200,160,60,0.3);
+    --bg: #09090b;
+    --bg2: #111114;
+    --bg3: #18181c;
+    --text: #e8e2d8;
+    --text-dim: rgba(232,226,216,0.45);
+    --text-faint: rgba(232,226,216,0.18);
+    --green: #4caf7d;
+    --green-dim: rgba(76,175,125,0.15);
+    --red: #e05c4b;
+    --radius: 10px;
+  }
+
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Crimson Pro', Georgia, serif;
+    min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; padding: 48px 24px 80px; line-height: 1.6;
+  }
+
+  .header { text-align: center; margin-bottom: 52px; }
+  .logo { display: inline-flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .logo-mark {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, #c8a03c, #7a5410);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    box-shadow: 0 0 20px rgba(200,160,60,0.35);
+  }
+  .logo-name { font-size: 26px; font-weight: 600; letter-spacing: 0.04em; color: #f5efe0; }
+  .logo-stage {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.2em;
+    color: rgba(200,160,60,0.6); background: var(--gold-dim);
+    border: 1px solid var(--gold-border); padding: 3px 10px; border-radius: 20px; align-self: center;
+  }
+  .header h1 { font-size: 32px; font-weight: 300; color: var(--text); margin-bottom: 10px; }
+  .header p { font-size: 17px; color: var(--text-dim); max-width: 520px; margin: 0 auto; font-style: italic; }
+
+  .card {
+    width: 100%; max-width: 680px; background: var(--bg2);
+    border: 1px solid rgba(255,255,255,0.07); border-radius: 16px;
+    overflow: hidden; margin-bottom: 24px;
+  }
+  .card-header {
+    padding: 20px 28px; border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .card-header-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--gold); box-shadow: 0 0 8px rgba(200,160,60,0.6);
+  }
+  .card-title {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    letter-spacing: 0.18em; color: var(--text-dim); text-transform: uppercase;
+  }
+  .card-body { padding: 28px; }
+
+  .dropzone {
+    border: 2px dashed rgba(200,160,60,0.25); border-radius: var(--radius);
+    padding: 44px 28px; text-align: center; cursor: pointer;
+    transition: all 0.25s ease; position: relative; background: rgba(200,160,60,0.02);
+  }
+  .dropzone:hover, .dropzone.drag-over { border-color: rgba(200,160,60,0.6); background: var(--gold-dim); }
+  .dropzone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-icon { font-size: 40px; margin-bottom: 14px; opacity: 0.6; }
+  .drop-title { font-size: 20px; color: var(--text); margin-bottom: 6px; }
+  .drop-sub { font-size: 14px; color: var(--text-dim); font-style: italic; }
+  .drop-formats { margin-top: 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--gold); letter-spacing: 0.1em; opacity: 0.7; }
+
+  .translation-strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 24px; }
+  .t-badge {
+    padding: 6px 16px; border-radius: 20px; font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 500; letter-spacing: 0.1em;
+    border: 1px solid rgba(255,255,255,0.08); color: var(--text-dim); background: var(--bg3);
+    display: flex; align-items: center; gap: 8px; transition: all 0.2s;
+  }
+  .t-badge.loaded { border-color: rgba(76,175,125,0.4); color: var(--green); background: var(--green-dim); }
+  .t-badge.loading { border-color: var(--gold-border); color: var(--gold); background: var(--gold-dim); animation: pulse-badge 1.2s ease-in-out infinite; }
+  @keyframes pulse-badge { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .t-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  .progress-wrap { margin-top: 20px; display: none; }
+  .progress-wrap.visible { display: block; }
+  .progress-label {
+    display: flex; justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--text-dim); margin-bottom: 8px; letter-spacing: 0.05em;
+  }
+  .progress-bar-bg { height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #8b6914, #c8a03c); border-radius: 2px; transition: width 0.3s ease; }
+
+  .import-controls { display: none; gap: 8px; margin-top: 12px; }
+  .import-controls.visible { display: flex; }
+  .btn-small {
+    padding: 6px 14px; font-size: 11px; font-family: 'JetBrains Mono', monospace;
+    border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);
+    background: var(--bg3); color: var(--text-dim); cursor: pointer; transition: all 0.2s;
+  }
+  .btn-small:hover { border-color: var(--gold-border); color: var(--gold); }
+  .btn-small:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .log {
+    margin-top: 20px; background: var(--bg3); border: 1px solid rgba(255,255,255,0.05);
+    border-radius: var(--radius); padding: 16px 18px; max-height: 220px;
+    overflow-y: auto; display: none;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.8;
+  }
+  .log.visible { display: block; }
+  .log-line { color: var(--text-dim); }
+  .log-line.success { color: var(--green); }
+  .log-line.error { color: var(--red); }
+  .log-line.info { color: var(--gold); }
+
+  .stats-grid { display: none; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 20px; }
+  .stats-grid.visible { display: grid; }
+  .stat-box { background: var(--bg3); border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius); padding: 16px; text-align: center; }
+  .stat-num { font-size: 28px; font-weight: 300; color: var(--gold); letter-spacing: -0.02em; }
+  .stat-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.15em; color: var(--text-faint); text-transform: uppercase; margin-top: 4px; }
+
+  .actions { display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap; }
+  .btn {
+    padding: 11px 22px; border-radius: 8px; font-size: 14px;
+    font-family: 'JetBrains Mono', monospace; font-weight: 500;
+    letter-spacing: 0.08em; cursor: pointer; border: none; transition: all 0.2s; text-transform: uppercase;
+  }
+  .btn-primary { background: linear-gradient(135deg, #c8a03c, #8b6914); color: #fff; box-shadow: 0 2px 14px rgba(200,160,60,0.3); }
+  .btn-primary:hover { box-shadow: 0 4px 20px rgba(200,160,60,0.45); transform: translateY(-1px); }
+  .btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid rgba(255,255,255,0.1); }
+  .btn-ghost:hover { border-color: rgba(255,255,255,0.25); color: var(--text); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none !important; }
+
+  .info-box {
+    width: 100%; max-width: 680px; border: 1px solid rgba(200,160,60,0.2);
+    border-radius: 12px; padding: 20px 24px; background: var(--gold-dim);
+    font-size: 15px; color: var(--text-dim); line-height: 1.7;
+  }
+  .info-box strong { color: var(--gold); font-weight: 600; }
+  .info-box code { color: var(--gold); background: rgba(200,160,60,0.1); padding: 1px 6px; border-radius: 4px; }
+
+  .db-viewer { display: none; }
+  .db-viewer.visible { display: block; }
+  .search-row { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; }
+  .search-input {
+    flex: 1; padding: 10px 16px; background: var(--bg3); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px; color: var(--text); font-size: 15px; font-family: 'Crimson Pro', serif;
+    outline: none; transition: border-color 0.2s;
+  }
+  .search-input:focus { border-color: var(--gold-border); }
+  .translation-select {
+    padding: 10px 14px; background: var(--bg3); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px; color: var(--text); font-size: 14px;
+    font-family: 'JetBrains Mono', monospace; outline: none; cursor: pointer;
+  }
+  .verse-results { display: flex; flex-direction: column; gap: 8px; }
+  .verse-card { background: var(--bg3); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 14px 16px; transition: border-color 0.2s; }
+  .verse-card:hover { border-color: var(--gold-border); }
+  .verse-ref { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--gold); letter-spacing: 0.1em; margin-bottom: 6px; text-transform: uppercase; }
+  .verse-text { font-size: 16px; color: var(--text); font-style: italic; line-height: 1.55; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(200,160,60,0.2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-mark">V</div>
+    <div class="logo-name">VerseFlow</div>
+    <div class="logo-stage">STAGE 1</div>
+  </div>
+  <h1>Bible Database Loader</h1>
+  <p>Import your Zefania XML files to build the local scripture database that powers VerseFlow.</p>
+</div>
+
+<div class="card">
+  <div class="card-header"><div class="card-header-dot"></div><div class="card-title">Loaded Translations</div></div>
+  <div class="card-body">
+    <div class="translation-strip" id="translationStrip">
+      <div class="t-badge" id="badge-KJV"><div class="t-badge-dot"></div>KJV</div>
+      <div class="t-badge" id="badge-WEB"><div class="t-badge-dot"></div>WEB</div>
+      <div class="t-badge" id="badge-ASV"><div class="t-badge-dot"></div>ASV</div>
+    </div>
+    <div style="font-size:14px;color:var(--text-dim);font-style:italic;">Drop one XML file at a time. VerseFlow auto-detects the translation from the file's metadata.</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><div class="card-header-dot"></div><div class="card-title">Import Zefania XML File</div></div>
+  <div class="card-body">
+
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept=".xml" />
+      <div class="drop-icon">📖</div>
+      <div class="drop-title">Drop your Zefania XML file here</div>
+      <div class="drop-sub">or click to browse your files</div>
+      <div class="drop-formats">Accepts: .xml — KJV · WEB · ASV</div>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label">
+        <span id="progressLabel">Parsing...</span>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+      <div class="import-controls" id="importControls">
+        <button class="btn-small" id="btnPause" onclick="togglePause()">⏸ Pause</button>
+      </div>
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-box"><div class="stat-num" id="statVerses">0</div><div class="stat-label">Verses</div></div>
+      <div class="stat-box"><div class="stat-num" id="statBooks">0</div><div class="stat-label">Books</div></div>
+      <div class="stat-box"><div class="stat-num" id="statTranslations">0</div><div class="stat-label">Translations</div></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="btnVerify" disabled onclick="openViewer()">✦ Verify Database</button>
+      <button class="btn btn-ghost" id="btnExport" disabled onclick="exportBackup()">💾 Export Backup</button>
+      <button class="btn btn-ghost" onclick="clearDatabase()">Clear All Data</button>
+    </div>
+
+  </div>
+</div>
+
+<div class="card db-viewer" id="dbViewer">
+  <div class="card-header"><div class="card-header-dot"></div><div class="card-title">Database Viewer — Search & Verify</div></div>
+  <div class="card-body">
+    <div class="search-row">
+      <input class="search-input" id="searchInput" placeholder='Try "John 3:16" or "shepherd" or "faith"…' oninput="searchVerses()" />
+      <select class="translation-select" id="searchTranslation" onchange="searchVerses()">
+        <option value="">All</option>
+      </select>
+    </div>
+    <div class="verse-results" id="verseResults">
+      <div style="color:var(--text-faint);font-style:italic;font-size:15px;">Start typing to search the database…</div>
+    </div>
+  </div>
+</div>
+
+<div class="info-box" style="margin-top:8px;">
+  <strong>How to get the XML files:</strong><br/>
+  Go to <strong>ph4.org</strong> → click the English (🇬🇧) flag section → find KJV, WEB, or ASV → download the Zefania XML file.
+  Drop each file here one at a time and VerseFlow stores all verses locally — no internet needed after that.<br/><br/>
+  <strong>Tip:</strong> Use <code>Ctrl+F</code> to jump straight to the search box once your data is loaded.
+</div>
+
+<script>
+// ── DB config — do NOT change DB_VERSION unless the schema below changes ──
+const DB_NAME      = 'VerseFlowDB';
+const DB_VERSION   = 2;
+const STORE_VERSES = 'verses';
+const STORE_META   = 'meta';
+
+let db          = null;
+let isPaused    = false;
+let pauseResolve = null;
+
+// ── openDB ────────────────────────────────────────────────────────────────
+function openDB() {
+  return new Promise((resolve, reject) => {
+    let req;
+    try {
+      req = indexedDB.open(DB_NAME, DB_VERSION);
+    } catch (e) {
+      return reject(new Error('IndexedDB unavailable — try Chrome or Edge.'));
+    }
+
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE_VERSES)) {
+        const s = d.createObjectStore(STORE_VERSES, { keyPath: 'id' });
+        s.createIndex('translation',     'translation',     { unique: false });
+        s.createIndex('book',            'book',            { unique: false });
+        s.createIndex('ref',             'ref',             { unique: false });
+        s.createIndex('text_normalized', 'text_normalized', { unique: false });
+      }
+      if (!d.objectStoreNames.contains(STORE_META)) {
+        d.createObjectStore(STORE_META, { keyPath: 'key' });
+      }
+    };
+
+    req.onsuccess = e => {
+      db = e.target.result;
+      db.onversionchange = () => {
+        db.close();
+        addLog('⚠️ Database updated elsewhere — please refresh.', 'error');
+      };
+      resolve(db);
+    };
+
+    // ── KEY FIX: e.target.error is a DOMException — read .message or .name ──
+    req.onerror = e => {
+      const err = e.target.error;
+      const msg = err
+        ? (err.message || err.name || 'Unknown error')
+        : 'Could not open database';
+      reject(new Error(msg));
+    };
+
+    req.onblocked = () => {
+      reject(new Error('Database blocked — close other VerseFlow tabs and refresh.'));
+    };
+  });
+}
+
+// ── Book number map ───────────────────────────────────────────────────────
+const BOOK_NAMES = {
+  1:'Genesis',2:'Exodus',3:'Leviticus',4:'Numbers',5:'Deuteronomy',
+  6:'Joshua',7:'Judges',8:'Ruth',9:'1 Samuel',10:'2 Samuel',
+  11:'1 Kings',12:'2 Kings',13:'1 Chronicles',14:'2 Chronicles',
+  15:'Ezra',16:'Nehemiah',17:'Esther',18:'Job',19:'Psalms',20:'Proverbs',
+  21:'Ecclesiastes',22:'Song of Solomon',23:'Isaiah',24:'Jeremiah',
+  25:'Lamentations',26:'Ezekiel',27:'Daniel',28:'Hosea',29:'Joel',
+  30:'Amos',31:'Obadiah',32:'Jonah',33:'Micah',34:'Nahum',35:'Habakkuk',
+  36:'Zephaniah',37:'Haggai',38:'Zechariah',39:'Malachi',
+  40:'Matthew',41:'Mark',42:'Luke',43:'John',44:'Acts',
+  45:'Romans',46:'1 Corinthians',47:'2 Corinthians',48:'Galatians',
+  49:'Ephesians',50:'Philippians',51:'Colossians',52:'1 Thessalonians',
+  53:'2 Thessalonians',54:'1 Timothy',55:'2 Timothy',56:'Titus',
+  57:'Philemon',58:'Hebrews',59:'James',60:'1 Peter',61:'2 Peter',
+  62:'1 John',63:'2 John',64:'3 John',65:'Jude',66:'Revelation'
+};
+
+function normalizeText(t) {
+  return t.toLowerCase().replace(/[^\w\s]/g,' ').replace(/\s+/g,' ').trim();
+}
+
+// ── Log / progress ────────────────────────────────────────────────────────
+function addLog(msg, type='') {
+  const el = document.getElementById('log');
+  el.classList.add('visible');
+  const line = document.createElement('div');
+  line.className = 'log-line ' + type;
+  line.textContent = msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+function clearLog() {
+  const el = document.getElementById('log');
+  el.innerHTML = ''; el.classList.remove('visible');
+}
+function setProgress(pct, label) {
+  document.getElementById('progressWrap').classList.add('visible');
+  document.getElementById('progressFill').style.width = Math.min(pct,100)+'%';
+  document.getElementById('progressPct').textContent  = Math.round(pct)+'%';
+  if (label) document.getElementById('progressLabel').textContent = label;
+}
+
+// ── Translation detection ─────────────────────────────────────────────────
+function detectTranslation(xmlDoc, filename) {
+  const check = str => {
+    const s = str.toUpperCase();
+    if (s.includes('KING JAMES') || s === 'KJV') return 'KJV';
+    if (s.includes('WORLD ENGLISH') || s === 'WEB') return 'WEB';
+    if (s.includes('AMERICAN STANDARD') || s === 'ASV') return 'ASV';
+    return null;
+  };
+  for (const tag of ['identifier','title','description']) {
+    const el = xmlDoc.querySelector(tag);
+    if (el) { const r = check(el.textContent.trim()); if (r) return r; }
+  }
+  return check(filename) || 'UNKNOWN';
+}
+
+// ── Zefania XML parser ────────────────────────────────────────────────────
+function parseZefania(xmlDoc, translation) {
+  const verses = [];
+  xmlDoc.querySelectorAll('BIBLEBOOK').forEach(book => {
+    const num  = parseInt(book.getAttribute('bnumber') || '0');
+    const name = BOOK_NAMES[num] || book.getAttribute('bname') || book.getAttribute('bsname') || `Book${num}`;
+    book.querySelectorAll('CHAPTER').forEach(ch => {
+      const chN = parseInt(ch.getAttribute('cnumber') || '0');
+      ch.querySelectorAll('VERS').forEach(v => {
+        const vN   = parseInt(v.getAttribute('vnumber') || '0');
+        const text = v.textContent.trim();
+        if (!text) return;
+        verses.push({
+          id:              `${translation}|${name}|${chN}|${vN}`,
+          translation, book: name, chapter: chN, verse: vN,
+          ref:             `${name} ${chN}:${vN}`,
+          text,
+          text_normalized: normalizeText(text),
+        });
+      });
+    });
+  });
+  return verses;
+}
+
+// ── Write to IndexedDB in batches (with pause support) ────────────────────
+async function waitIfPaused() {
+  if (!isPaused) return;
+  await new Promise(res => { pauseResolve = res; });
+}
+
+async function writeVerses(verses) {
+  const BATCH = 500;
+  let done = 0;
+  for (let i = 0; i < verses.length; i += BATCH) {
+    await waitIfPaused();
+    const batch = verses.slice(i, i + BATCH);
+    await new Promise((res, rej) => {
+      const tx = db.transaction(STORE_VERSES, 'readwrite');
+      const st = tx.objectStore(STORE_VERSES);
+      batch.forEach(v => st.put(v));
+      tx.oncomplete = res;
+      tx.onerror    = e => rej(new Error(e.target.error?.message || 'Write error'));
+    });
+    done += batch.length;
+    setProgress(30 + (done / verses.length) * 65,
+      `Storing… ${done.toLocaleString()} / ${verses.length.toLocaleString()} verses`);
+  }
+}
+
+async function saveMeta(translation, count, booksCount) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction(STORE_META, 'readwrite');
+    tx.objectStore(STORE_META).put({ key:`trans_${translation}`, translation, count, booksCount, loadedAt: new Date().toISOString() });
+    tx.oncomplete = res;
+    tx.onerror    = e => rej(new Error(e.target.error?.message || 'Meta write error'));
+  });
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────
+function loadStats() {
+  return new Promise((res, rej) => {
+    const tx           = db.transaction(STORE_VERSES, 'readonly');
+    const translations = new Set();
+    const books        = new Set();
+    let   total        = 0;
+    tx.objectStore(STORE_VERSES).openCursor().onsuccess = e => {
+      const c = e.target.result;
+      if (c) { total++; translations.add(c.value.translation); books.add(c.value.book); c.continue(); }
+      else res({ total, translations: translations.size, books: books.size, translationList: [...translations] });
+    };
+    tx.onerror = e => rej(new Error(e.target.error?.message || 'Stats error'));
+  });
+}
+
+async function refreshStats() {
+  const s = await loadStats();
+  document.getElementById('statVerses').textContent       = s.total.toLocaleString();
+  document.getElementById('statBooks').textContent        = s.books;
+  document.getElementById('statTranslations').textContent = s.translations;
+  document.getElementById('statsGrid').classList.add('visible');
+  document.getElementById('btnVerify').disabled = false;
+  document.getElementById('btnExport').disabled = false;
+  const sel = document.getElementById('searchTranslation');
+  sel.innerHTML = '<option value="">All</option>';
+  s.translationList.forEach(t => {
+    const o = document.createElement('option'); o.value = t; o.textContent = t; sel.appendChild(o);
+  });
+  return s;
+}
+
+function setBadge(t, state) {
+  const el = document.getElementById('badge-' + t);
+  if (el) el.className = 't-badge ' + state;
+}
+
+// ── Pause / Resume ────────────────────────────────────────────────────────
+function togglePause() {
+  const btn = document.getElementById('btnPause');
+  if (isPaused) {
+    isPaused = false; btn.textContent = '⏸ Pause';
+    if (pauseResolve) { pauseResolve(); pauseResolve = null; }
+  } else {
+    isPaused = true; btn.textContent = '▶ Resume';
+    addLog('⏸ Import paused.', 'info');
+  }
+}
+
+// ── Export backup ─────────────────────────────────────────────────────────
+function exportBackup() {
+  const tx = db.transaction(STORE_VERSES, 'readonly');
+  const all = [];
+  tx.objectStore(STORE_VERSES).openCursor().onsuccess = e => {
+    const c = e.target.result;
+    if (c) { all.push(c.value); c.continue(); }
+    else {
+      const blob = new Blob([JSON.stringify(all)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'verseflow-bible-backup.json'; a.click();
+      addLog(`💾 Exported ${all.length.toLocaleString()} verses.`, 'success');
+    }
+  };
+}
+
+// ── Main import ───────────────────────────────────────────────────────────
+async function handleFile(file) {
+  clearLog();
+  isPaused = false;
+  document.getElementById('btnPause').textContent = '⏸ Pause';
+  setProgress(0, 'Reading file…');
+  document.getElementById('statsGrid').classList.remove('visible');
+  document.getElementById('importControls').classList.add('visible');
+  addLog(`📂  ${file.name}  (${(file.size/1024/1024).toFixed(2)} MB)`, 'info');
+
+  let text;
+  try { text = await file.text(); }
+  catch(e) { addLog('❌ Could not read file: ' + e.message, 'error'); return; }
+
+  setProgress(10, 'Parsing XML…');
+
+  let xmlDoc;
+  try {
+    xmlDoc = new DOMParser().parseFromString(text, 'application/xml');
+    const err = xmlDoc.querySelector('parsererror');
+    if (err) throw new Error(err.textContent.slice(0,120));
+  } catch(e) { addLog('❌ XML parse error: ' + e.message, 'error'); return; }
+
+  const translation = detectTranslation(xmlDoc, file.name);
+  addLog(`🔍  Translation detected: ${translation}`, 'info');
+  if (translation === 'UNKNOWN') {
+    addLog('⚠️  Cannot identify translation. Rename your file to include KJV, WEB, or ASV.', 'error'); return;
+  }
+
+  setBadge(translation, 'loading');
+  setProgress(20, 'Extracting verses…');
+
+  const verses  = parseZefania(xmlDoc, translation);
+  const bookSet = new Set(verses.map(v => v.book));
+  addLog(`📖  ${verses.length.toLocaleString()} verses found across ${bookSet.size} books`, 'success');
+
+  if (!verses.length) {
+    addLog('❌ No verses found — is this a valid Zefania XML Bible?', 'error');
+    setBadge(translation, ''); return;
+  }
+
+  setProgress(30, 'Writing to database…');
+  try {
+    await writeVerses(verses);
+    await saveMeta(translation, verses.length, bookSet.size);
+  } catch(e) {
+    addLog('❌ Database error: ' + e.message, 'error');
+    setBadge(translation, ''); return;
+  }
+
+  setProgress(100, 'Complete!');
+  setBadge(translation, 'loaded');
+  addLog(`✅  ${translation} — ${verses.length.toLocaleString()} verses stored successfully`, 'success');
+  await refreshStats();
+  setTimeout(() => document.getElementById('importControls').classList.remove('visible'), 2000);
+}
+
+// ── Search ────────────────────────────────────────────────────────────────
+function openViewer() {
+  document.getElementById('dbViewer').classList.add('visible');
+  document.getElementById('dbViewer').scrollIntoView({ behavior:'smooth' });
+  setTimeout(() => document.getElementById('searchInput').focus(), 300);
+  searchVerses();
+}
+
+function searchVerses() {
+  const q     = document.getElementById('searchInput').value.trim().toLowerCase();
+  const trans = document.getElementById('searchTranslation').value;
+  const el    = document.getElementById('verseResults');
+  el.innerHTML = '';
+  if (!q && !trans) {
+    el.innerHTML = '<div style="color:var(--text-faint);font-style:italic;font-size:15px;">Start typing to search…</div>'; return;
+  }
+  const results = [];
+  let scanned = 0;
+  const MAX = 6000;
+  db.transaction(STORE_VERSES,'readonly').objectStore(STORE_VERSES).openCursor().onsuccess = e => {
+    const c = e.target.result;
+    if (c && scanned < MAX) {
+      scanned++;
+      const v = c.value;
+      if ((!trans || v.translation===trans) && (!q || v.ref.toLowerCase().includes(q) || v.text_normalized.includes(q)))
+        results.push(v);
+      c.continue();
+    } else {
+      if (!results.length) { el.innerHTML='<div style="color:var(--text-faint);font-style:italic;font-size:15px;">No verses found.</div>'; return; }
+      results.slice(0,8).forEach(v => {
+        const d = document.createElement('div'); d.className='verse-card';
+        d.innerHTML=`<div class="verse-ref">${v.ref} · ${v.translation}</div><div class="verse-text">${v.text}</div>`;
+        el.appendChild(d);
+      });
+      if (results.length > 8) {
+        const n = document.createElement('div');
+        n.style.cssText='font-size:12px;color:var(--text-faint);margin-top:8px;font-style:italic';
+        n.textContent=`Showing 8 of ${results.length} matches`; el.appendChild(n);
+      }
+    }
+  };
+}
+
+// ── Clear DB ──────────────────────────────────────────────────────────────
+function clearDatabase() {
+  if (!confirm('Delete ALL stored Bible data?')) return;
+  const tx = db.transaction([STORE_VERSES, STORE_META], 'readwrite');
+  tx.objectStore(STORE_VERSES).clear();
+  tx.objectStore(STORE_META).clear();
+  tx.oncomplete = () => {
+    ['KJV','WEB','ASV'].forEach(t => setBadge(t,''));
+    ['statsGrid','dbViewer','progressWrap'].forEach(id => document.getElementById(id).classList.remove('visible'));
+    document.getElementById('btnVerify').disabled = true;
+    document.getElementById('btnExport').disabled = true;
+    clearLog(); addLog('🗑️  Database cleared.', 'info');
+  };
+}
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  const mod = /mac/i.test(navigator.platform) ? e.metaKey : e.ctrlKey;
+  if (mod && e.key.toLowerCase()==='f') {
+    e.preventDefault();
+    document.getElementById('dbViewer').classList.contains('visible')
+      ? document.getElementById('searchInput').focus() : openViewer();
+  }
+  if (e.key==='Escape') {
+    const inp = document.getElementById('searchInput');
+    if (document.activeElement===inp && inp.value) { inp.value=''; searchVerses(); }
+  }
+});
+
+// ── Drag & drop + click ───────────────────────────────────────────────────
+const dz = document.getElementById('dropzone');
+const fi = document.getElementById('fileInput');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', ()  => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag-over');
+  const f = [...e.dataTransfer.files].find(f => f.name.endsWith('.xml'));
+  f ? handleFile(f) : addLog('⚠️ Please drop a .xml file.','error');
+});
+fi.addEventListener('change', e => { if(e.target.files[0]) handleFile(e.target.files[0]); fi.value=''; });
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+openDB()
+  .then(async () => {
+    const s = await loadStats();
+    if (s.total > 0) {
+      s.translationList.forEach(t => setBadge(t,'loaded'));
+      await refreshStats();
+      addLog(`💾  Found existing database: ${s.total.toLocaleString()} verses  (${s.translationList.join(', ')})`, 'success');
+    }
+  })
+  .catch(e => {
+    addLog('❌  Could not open database: ' + e.message, 'error');
+    addLog('ℹ️  Make sure you\'re using Chrome or Edge — Firefox sometimes blocks local file storage.', 'info');
+  });
+</script>
+</body>
+</html>
