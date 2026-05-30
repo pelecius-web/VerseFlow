@@ -133,18 +133,19 @@ def test_load_chapter_matches_actual_verse_number_not_list_index(monkeypatch, ap
 
 def test_display_overlay_fit_uses_translation_font_size(app):
     window = DisplayWindow(FakeDisplay(), FakeThemeManager())
+    dw = window._display_widget  # Rendering methods moved to DisplayWidget in Phase 1 v1.3.0
     verse = {
         "reference": "John 3:16",
         "translation": "English KJV",
         "text": "For God so loved the world",
     }
-    wide_html = window._build_overlay_html(verse, 28, verse["text"], is_primary=False)
-    narrow_html = window._build_overlay_html(verse, 10, verse["text"], is_primary=False)
-    font = window.font()
+    wide_html = dw._build_overlay_html(verse, 28, verse["text"], is_primary=False)
+    narrow_html = dw._build_overlay_html(verse, 10, verse["text"], is_primary=False)
+    font = dw.font()
     font.setFamily("Segoe UI")
     font.setPointSize(24)
-    wide_height = window._measure_rich_text_height(wide_html, font, 180)
-    narrow_height = window._measure_rich_text_height(narrow_html, font, 180)
+    wide_height = dw._measure_rich_text_height(wide_html, font, 180)
+    narrow_height = dw._measure_rich_text_height(narrow_html, font, 180)
 
     assert wide_height > narrow_height
 

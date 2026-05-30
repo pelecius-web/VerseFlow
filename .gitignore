@@ -35,6 +35,20 @@ desktop.ini
 
 # Logs
 *.log
+crash_log.txt
+app_output.log
+logs/
+scratch/
+
+# Debug / diagnostic artifacts
+src/_dbg.log
+src/_diag_*
+src/_launch*
+src/_test_*
+src/_sp_out.txt
+
+# Test cache
+.pytest_cache/
 
 # Virtual environments
 .venv/
